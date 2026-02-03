@@ -3,6 +3,8 @@
 ## Notes: Highlights talent nodes that can be refunded right now (class + spec trees). Use /rtg config for glow color + texture.
 ## Author: Cantrelle
 ## Version: @project-version@
+## X-Curse-Project-ID: 1445604
+## X-Wago-ID: E6gvnXN1
 ## SavedVariables: RefundableTalentsGlowDB
 ## OptionalDeps: Blizzard_ClassTalentUI, Blizzard_PlayerSpells
 
