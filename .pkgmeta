@@ -1,0 +1,16 @@
+package-as: RefundableTalentsGlow
+
+curse-project-id: 1445604
+wago-project-id: E6gvnXN1
+
+enable-nolib-creation: yes
+
+ignore:
+  - README.md
+  - LICENSE
+  - CLAUDE.md
+  - .github
+  - .gitignore
+
+externals:
+  Libs/Ace3: https://repos.curseforge.com/wow/ace3/trunk
