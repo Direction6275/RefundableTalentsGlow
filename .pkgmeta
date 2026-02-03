@@ -8,7 +8,6 @@ enable-nolib-creation: yes
 ignore:
   - README.md
   - LICENSE
-  - CLAUDE.md
   - .github
   - .gitignore
 
