@@ -2,6 +2,7 @@ local ADDON_NAME = ...
 RefundableTalentsGlowDB = RefundableTalentsGlowDB or {}
 
 local DB = RefundableTalentsGlowDB
+local AceGUI = LibStub("AceGUI-3.0")
 if DB.enabled == nil then DB.enabled = true end
 
 -- Defaults
@@ -283,16 +284,24 @@ local function StartBurstRefresh()
 	end)
 end
 
+-- Forward declarations for config panel functions
+local CreateToggleButton, CreateConfigPanel, ToggleConfigPanel, PopulateConfigWidgets, RefreshConfigValues
+
 local function HookRoot(root)
 	if not root or root.__RTGHooked or not root.HookScript then return end
 	root.__RTGHooked = true
 
 	root:HookScript("OnShow", function()
 		StartBurstRefresh()
+		CreateToggleButton(root)
 	end)
 
 	root:HookScript("OnHide", function()
 		StopBurstRefresh()
+		-- Hide the config panel when the talent frame closes
+		if RTG_ConfigPanel then
+			RTG_ConfigPanel:Hide()
+		end
 	end)
 end
 
@@ -365,7 +374,6 @@ end)
 
 
 -- === Config panel (/rtg config) ===
-local RTG_ConfigFrame
 
 RTG_TEXTURES = {
 	{ name = "Action Button Border (default)", value = "Interface\\Buttons\\UI-ActionButton-Border", blend = "ADD" },
@@ -377,191 +385,196 @@ RTG_TEXTURES = {
 	{ name = "Azerite Power Ring", value = "atlas:AzeritePowerRing", blend = "ADD", fallback = "Interface\\Azerite\\AzeritePowerRing" },
 }
 
-local function TextureNameForPath(path)
-	for _, opt in ipairs(RTG_TEXTURES or {}) do
-		if opt.value == path then return opt.name end
-	end
-	return path
-end
+local RTG_ConfigPanel   -- raw WoW frame (outer shell, parented to talent frame)
+local RTG_ConfigGroup   -- AceGUI SimpleGroup (embedded inside shell)
+local RTG_ToggleButton  -- gear icon button on talent frame
 
-local function OpenColorPicker()
-	local c = DB.glowColor or { r = 0.2, g = 1.0, b = 0.2, a = 1.0 }
-	local prevR, prevG, prevB, prevA = c.r or 0.2, c.g or 1.0, c.b or 0.2, c.a or 1.0
+-- Widget references for RefreshConfigValues
+local RTG_ColorPicker, RTG_OpacitySlider, RTG_TextureDropdown
 
-	local function Apply(r, g, b, a)
+PopulateConfigWidgets = function(group)
+	-- Glow Color picker (RGB only, no alpha)
+	local colorPicker = AceGUI:Create("ColorPicker")
+	colorPicker:SetLabel("Glow Color")
+	colorPicker:SetHasAlpha(false)
+	colorPicker:SetFullWidth(true)
+	local c = DB.glowColor or {}
+	colorPicker:SetColor(c.r or 0.2, c.g or 1.0, c.b or 0.2)
+	colorPicker:SetCallback("OnValueChanged", function(_, _, r, g, b)
 		DB.glowColor = DB.glowColor or {}
-		DB.glowColor.r, DB.glowColor.g, DB.glowColor.b, DB.glowColor.a = r, g, b, a
-
-		if RTG_ConfigFrame and RTG_ConfigFrame._swatch and RTG_ConfigFrame._swatch.tex then
-			RTG_ConfigFrame._swatch.tex:SetColorTexture(r, g, b, 1)
-		end
-
+		DB.glowColor.r, DB.glowColor.g, DB.glowColor.b = r, g, b
 		UpdateAllGlowStyles()
 		RequestUpdate()
+	end)
+	colorPicker:SetCallback("OnValueConfirmed", function(_, _, r, g, b)
+		DB.glowColor = DB.glowColor or {}
+		DB.glowColor.r, DB.glowColor.g, DB.glowColor.b = r, g, b
+		UpdateAllGlowStyles()
+		RequestUpdate()
+	end)
+	group:AddChild(colorPicker)
+	RTG_ColorPicker = colorPicker
+
+	-- Glow Opacity slider
+	local opacitySlider = AceGUI:Create("Slider")
+	opacitySlider:SetLabel("Glow Opacity")
+	opacitySlider:SetSliderValues(0, 1, 0.01)
+	opacitySlider:SetIsPercent(true)
+	opacitySlider:SetFullWidth(true)
+	opacitySlider:SetValue(DB.glowColor and DB.glowColor.a or 1.0)
+	opacitySlider:SetCallback("OnValueChanged", function(_, _, val)
+		DB.glowColor = DB.glowColor or {}
+		DB.glowColor.a = val
+		UpdateAllGlowStyles()
+		RequestUpdate()
+	end)
+	group:AddChild(opacitySlider)
+	RTG_OpacitySlider = opacitySlider
+
+	-- Glow Texture dropdown
+	local textureDropdown = AceGUI:Create("Dropdown")
+	textureDropdown:SetLabel("Glow Texture")
+	textureDropdown:SetFullWidth(true)
+
+	local dropdownList = {}
+	for _, opt in ipairs(RTG_TEXTURES) do
+		dropdownList[opt.value] = opt.name
+	end
+	textureDropdown:SetList(dropdownList)
+	textureDropdown:SetValue(DB.glowTexture or "Interface\\Buttons\\UI-ActionButton-Border")
+	textureDropdown:SetCallback("OnValueChanged", function(_, _, key)
+		DB.glowTexture = key
+		UpdateAllGlowStyles()
+		RequestUpdate()
+	end)
+	group:AddChild(textureDropdown)
+	RTG_TextureDropdown = textureDropdown
+end
+
+RefreshConfigValues = function()
+	if RTG_ColorPicker then
+		local c = DB.glowColor or {}
+		RTG_ColorPicker:SetColor(c.r or 0.2, c.g or 1.0, c.b or 0.2)
+	end
+	if RTG_OpacitySlider then
+		RTG_OpacitySlider:SetValue(DB.glowColor and DB.glowColor.a or 1.0)
+	end
+	if RTG_TextureDropdown then
+		RTG_TextureDropdown:SetValue(DB.glowTexture or "Interface\\Buttons\\UI-ActionButton-Border")
+	end
+end
+
+CreateToggleButton = function(root)
+	if RTG_ToggleButton then return end
+
+	local btn = CreateFrame("Button", nil, root)
+	btn:SetSize(22, 22)
+	btn:SetFrameStrata("HIGH")
+	btn:SetFrameLevel((root.GetFrameLevel and root:GetFrameLevel() or 0) + 200)
+
+	btn:SetPoint("TOPRIGHT", root, "TOPRIGHT", -30, -4)
+
+	local icon = btn:CreateTexture(nil, "ARTWORK")
+	icon:SetPoint("CENTER", btn, "CENTER", 0, 3)
+	icon:SetSize(22, 22)
+	icon:SetTexture("Interface\\WorldMap\\GEAR_64GREY")
+
+	local highlight = btn:CreateTexture(nil, "HIGHLIGHT")
+	highlight:SetPoint("CENTER", btn, "CENTER", 0, 3)
+	highlight:SetSize(22, 22)
+	highlight:SetTexture("Interface\\WorldMap\\GEAR_64GREY")
+	highlight:SetBlendMode("ADD")
+
+	btn:SetScript("OnClick", function()
+		ToggleConfigPanel()
+	end)
+
+	btn:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_BOTTOMLEFT")
+		GameTooltip:SetText("Refundable Talents Glow Settings")
+		GameTooltip:Show()
+	end)
+
+	btn:SetScript("OnLeave", function()
+		GameTooltip:Hide()
+	end)
+
+	RTG_ToggleButton = btn
+end
+
+CreateConfigPanel = function(root)
+	if RTG_ConfigPanel then return end
+
+	-- Outer shell: raw WoW frame parented to talent frame root
+	local shell = CreateFrame("Frame", "RTG_ConfigPanel", root, "BackdropTemplate")
+	shell:SetSize(240, 300)
+	shell:SetPoint("TOPLEFT", root, "TOPRIGHT", 2, 0)
+	shell:SetFrameStrata("HIGH")
+	shell:SetClampedToScreen(true)
+	shell:EnableMouse(true)
+
+	shell:SetBackdrop({
+		bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+		tile = true,
+		tileSize = 16,
+		edgeSize = 16,
+		insets = { left = 4, right = 4, top = 4, bottom = 4 },
+	})
+	shell:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+	shell:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+
+	-- Title
+	local title = shell:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+	title:SetPoint("TOP", shell, "TOP", 0, -10)
+	title:SetText("RTG Settings")
+
+	-- Inner AceGUI container
+	local group = AceGUI:Create("SimpleGroup")
+	group:SetLayout("List")
+
+	-- Reparent AceGUI container frame into the shell
+	local groupFrame = group.frame
+	groupFrame:SetParent(shell)
+	groupFrame:ClearAllPoints()
+	groupFrame:SetPoint("TOPLEFT", shell, "TOPLEFT", 15, -35)
+	groupFrame:SetPoint("BOTTOMRIGHT", shell, "BOTTOMRIGHT", -15, 15)
+	groupFrame:SetFrameStrata("HIGH")
+	groupFrame:Show()
+
+	-- Populate widgets
+	PopulateConfigWidgets(group)
+
+	RTG_ConfigPanel = shell
+	RTG_ConfigGroup = group
+
+	shell:Hide()
+end
+
+ToggleConfigPanel = function()
+	-- Find the visible talent frame root
+	local root = nil
+	for _, r in ipairs(GetTalentRoots()) do
+		if r and r.IsShown and r:IsShown() then
+			root = r
+			break
+		end
 	end
 
-	-- Modern picker API (Retail)
-	if ColorPickerFrame and ColorPickerFrame.SetupColorPickerAndShow then
-		local info = {
-			r = prevR,
-			g = prevG,
-			b = prevB,
-			opacity = 1 - prevA,
-			hasOpacity = true,
-			swatchFunc = function()
-				local r, g, b = ColorPickerFrame:GetColorRGB()
-				local a = 1
-				if OpacitySliderFrame and OpacitySliderFrame.GetValue then
-					a = 1 - OpacitySliderFrame:GetValue()
-				elseif ColorPickerFrame.opacity then
-					a = 1 - ColorPickerFrame.opacity
-				end
-				Apply(r, g, b, a)
-			end,
-			opacityFunc = function()
-				local r, g, b = ColorPickerFrame:GetColorRGB()
-				local a = 1
-				if OpacitySliderFrame and OpacitySliderFrame.GetValue then
-					a = 1 - OpacitySliderFrame:GetValue()
-				elseif ColorPickerFrame.opacity then
-					a = 1 - ColorPickerFrame.opacity
-				end
-				Apply(r, g, b, a)
-			end,
-			cancelFunc = function()
-				Apply(prevR, prevG, prevB, prevA)
-			end,
-		}
-		ColorPickerFrame:SetupColorPickerAndShow(info)
+	if not root then
+		print("|cff33ff99RTG|r Open your talent tree first.")
 		return
 	end
 
-	-- Legacy picker API fallback
-	local function ColorCallback(restore)
-		local r, g, b, a
-		if restore then
-			r, g, b, a = restore[1], restore[2], restore[3], restore[4]
-		else
-			r, g, b = ColorPickerFrame:GetColorRGB()
-			a = 1 - (OpacitySliderFrame and OpacitySliderFrame:GetValue() or 0)
-		end
-		Apply(r, g, b, a)
-	end
+	-- Lazy-create toggle button and panel
+	CreateToggleButton(root)
+	CreateConfigPanel(root)
 
-	ColorPickerFrame.func = ColorCallback
-	ColorPickerFrame.opacityFunc = ColorCallback
-	ColorPickerFrame.cancelFunc = ColorCallback
-
-	ColorPickerFrame.hasOpacity = true
-	ColorPickerFrame.opacity = 1 - (prevA or 1)
-
-	ColorPickerFrame:SetColorRGB(prevR, prevG, prevB)
-	ColorPickerFrame.previousValues = { prevR, prevG, prevB, prevA }
-
-	ColorPickerFrame:Hide()
-	ColorPickerFrame:Show()
-end
-
-local function CreateConfigPanel()
-	if RTG_ConfigFrame then return end
-
-	local f = CreateFrame("Frame", "RefundableTalentsGlowConfigFrame", UIParent, "BasicFrameTemplateWithInset")
-	f:SetSize(380, 250)
-	f:SetPoint("CENTER")
-	f:SetFrameStrata("FULLSCREEN_DIALOG")
-	f:SetToplevel(true)
-	f:SetClampedToScreen(true)
-	f:SetMovable(true)
-	f:EnableMouse(true)
-	f:RegisterForDrag("LeftButton")
-	f:SetScript("OnDragStart", function(self) self:StartMoving() end)
-	f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
-
-	f.TitleText:SetText("Refundable Talents Glow")
-
-	-- Enabled checkbox
-	local enabled = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
-	enabled:SetPoint("TOPLEFT", 16, -40)
-	enabled.text:SetText("Enable glow")
-	enabled:SetChecked(DB.enabled == true)
-	enabled:SetScript("OnClick", function(self)
-		DB.enabled = self:GetChecked() == true
-		RequestUpdate()
-	end)
-
-	-- Texture dropdown
-	local texLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	texLabel:SetPoint("TOPLEFT", enabled, "BOTTOMLEFT", 0, -16)
-	texLabel:SetText("Glow texture")
-
-	local dd = CreateFrame("Frame", "RefundableTalentsGlowTextureDropdown", f, "UIDropDownMenuTemplate")
-	dd:SetPoint("TOPLEFT", texLabel, "BOTTOMLEFT", -16, -6)
-
-	local function SetTexture(path)
-		DB.glowTexture = path
-		UIDropDownMenu_SetSelectedValue(dd, path)
-		UIDropDownMenu_SetText(dd, TextureNameForPath(path))
-		UpdateAllGlowStyles()
-		RequestUpdate()
-	end
-
-	UIDropDownMenu_Initialize(dd, function()
-		for _, opt in ipairs(RTG_TEXTURES or {}) do
-			local info = UIDropDownMenu_CreateInfo()
-			info.text = opt.name
-			info.value = opt.value
-			info.func = function() SetTexture(opt.value) end
-			UIDropDownMenu_AddButton(info)
-		end
-	end)
-
-	UIDropDownMenu_SetWidth(dd, 250)
-	UIDropDownMenu_SetSelectedValue(dd, DB.glowTexture)
-	UIDropDownMenu_SetText(dd, TextureNameForPath(DB.glowTexture))
-
-	-- Color picker
-	local colorLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	colorLabel:SetPoint("TOPLEFT", dd, "BOTTOMLEFT", 16, -18)
-	colorLabel:SetText("Glow color")
-
-	local colorBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-	colorBtn:SetSize(130, 22)
-	colorBtn:SetPoint("TOPLEFT", colorLabel, "BOTTOMLEFT", 0, -6)
-	colorBtn:SetText("Choose color...")
-	colorBtn:SetScript("OnClick", OpenColorPicker)
-
-	local swatch = CreateFrame("Frame", nil, f, "BackdropTemplate")
-	swatch:SetSize(18, 18)
-	swatch:SetPoint("LEFT", colorBtn, "RIGHT", 10, 0)
-	swatch.tex = swatch:CreateTexture(nil, "ARTWORK")
-	swatch.tex:SetAllPoints()
-
-	do
-		local c = DB.glowColor or {}
-		swatch.tex:SetColorTexture(c.r or 0.2, c.g or 1.0, c.b or 0.2, 1)
-	end
-
-	local hint = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	hint:SetPoint("BOTTOMLEFT", 16, 14)
-	hint:SetJustifyH("LEFT")
-	hint:SetText("Use /rtg on | off | config\nChanges apply immediately while the talent UI is open.")
-
-	f._swatch = swatch
-	RTG_ConfigFrame = f
-end
-
-local function ToggleConfigPanel()
-	CreateConfigPanel()
-	if RTG_ConfigFrame:IsShown() then
-		RTG_ConfigFrame:Hide()
+	if RTG_ConfigPanel:IsShown() then
+		RTG_ConfigPanel:Hide()
 	else
-		-- Make sure we're above the talent UI
-		local top = _G.ClassTalentFrame or _G.PlayerSpellsFrame
-		if top and top.GetFrameLevel and RTG_ConfigFrame.SetFrameLevel then
-			RTG_ConfigFrame:SetFrameLevel((top:GetFrameLevel() or 0) + 50)
-		end
-		RTG_ConfigFrame:Show()
-		if RTG_ConfigFrame.Raise then RTG_ConfigFrame:Raise() end
+		RefreshConfigValues()
+		RTG_ConfigPanel:Show()
 	end
 end
 
@@ -581,9 +594,7 @@ SlashCmdList["REFUNDABLETALENTSGLOW"] = function(msg)
 	elseif msg == "debug" then
 		DB.debug = not DB.debug
 		print("|cff33ff99RTG|r debug:", DB.debug and "on" or "off")
-	elseif msg == "config" then
-		ToggleConfigPanel()
-	elseif msg == "cfg" then
+	elseif msg == "config" or msg == "cfg" then
 		ToggleConfigPanel()
 	else
 		print("|cff33ff99RTG|r commands: /rtg on | off | config | debug")

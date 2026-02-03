@@ -6,4 +6,8 @@
 ## SavedVariables: RefundableTalentsGlowDB
 ## OptionalDeps: Blizzard_ClassTalentUI, Blizzard_PlayerSpells
 
+Libs\Ace3\LibStub\LibStub.lua
+Libs\Ace3\CallbackHandler-1.0\CallbackHandler-1.0.xml
+Libs\Ace3\AceGUI-3.0\AceGUI-3.0.xml
+
 RefundableTalentsGlow.lua
