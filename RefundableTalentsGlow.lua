@@ -89,7 +89,13 @@ local function ApplyGlowStyle(tex)
 	end
 
 	local c = DB.glowColor or {}
-	tex:SetVertexColor(tonumber(c.r) or 0.2, tonumber(c.g) or 1.0, tonumber(c.b) or 0.2, tonumber(c.a) or 1.0)
+	tex:SetVertexColor(tonumber(c.r) or 0.2, tonumber(c.g) or 1.0, tonumber(c.b) or 0.2, 1)
+
+	-- Opacity is controlled by the wrapper frame's alpha (multiplies with animation alpha)
+	local wrapper = tex:GetParent()
+	if wrapper and wrapper.__RTGIsWrapper then
+		wrapper:SetAlpha(tonumber(c.a) or 1.0)
+	end
 end
 
 local function EnsureGlow(button)
@@ -98,16 +104,17 @@ local function EnsureGlow(button)
 		return button.__RTGGlow
 	end
 
-	-- Subtle border glow (green) + pulse animation
-	local glow = button:CreateTexture(nil, "OVERLAY", nil, 7)
-	ApplyGlowStyle(glow)
-	glow:Hide()
+	-- Wrapper frame controls opacity via SetAlpha, independent of the pulse animation
+	local wrapper = CreateFrame("Frame", nil, button)
+	wrapper.__RTGIsWrapper = true
+	wrapper:SetFrameLevel((button.GetFrameLevel and button:GetFrameLevel() or 0) + 5)
+	wrapper:SetAlpha(DB.glowColor and tonumber(DB.glowColor.a) or 1.0)
 
 	local function SizeGlow()
 		local w = (button.GetWidth and button:GetWidth()) or 36
 		local h = (button.GetHeight and button:GetHeight()) or 36
-		glow:SetSize(w * 1.85, h * 1.85)
-		glow:SetPoint("CENTER", button, "CENTER", 0, 0)
+		wrapper:SetSize(w * 1.85, h * 1.85)
+		wrapper:SetPoint("CENTER", button, "CENTER", 0, 0)
 	end
 	SizeGlow()
 
@@ -115,6 +122,12 @@ local function EnsureGlow(button)
 		button:HookScript("OnSizeChanged", SizeGlow)
 	end
 
+	-- Glow texture inside wrapper
+	local glow = wrapper:CreateTexture(nil, "OVERLAY", nil, 7)
+	glow:SetAllPoints(wrapper)
+	ApplyGlowStyle(glow)
+
+	-- Pulse animation with fixed alpha values (wrapper alpha handles opacity)
 	local ag = glow:CreateAnimationGroup()
 	ag:SetLooping("REPEAT")
 
@@ -131,19 +144,22 @@ local function EnsureGlow(button)
 	a2:SetOrder(2)
 
 	button.__RTGGlow = glow
+	button.__RTGGlowWrapper = wrapper
 	button.__RTGGlowAG = ag
+	wrapper:Hide()
 	return glow
 end
 
 local function SetGlowing(button, shouldGlow)
 	local glow = EnsureGlow(button)
+	local wrapper = button.__RTGGlowWrapper
 	local ag = button.__RTGGlowAG
 	if shouldGlow then
-		glow:Show()
+		wrapper:Show()
 		if ag and not ag:IsPlaying() then ag:Play() end
 	else
 		if ag and ag:IsPlaying() then ag:Stop() end
-		glow:Hide()
+		wrapper:Hide()
 	end
 end
 
@@ -204,6 +220,16 @@ local function UpdateAllGlowStyles()
 	ForEachPotentialNodeButton(function(btn)
 		if btn.__RTGGlow then
 			ApplyGlowStyle(btn.__RTGGlow)
+		end
+	end)
+end
+
+local function UpdateAllGlowOpacity()
+	-- Lightweight update: only touches wrapper frame alpha, no texture operations.
+	local opacity = DB.glowColor and tonumber(DB.glowColor.a) or 1.0
+	ForEachPotentialNodeButton(function(btn)
+		if btn.__RTGGlowWrapper then
+			btn.__RTGGlowWrapper:SetAlpha(opacity)
 		end
 	end)
 end
@@ -443,8 +469,7 @@ PopulateConfigWidgets = function(group)
 	opacitySlider:SetCallback("OnValueChanged", function(_, _, val)
 		DB.glowColor = DB.glowColor or {}
 		DB.glowColor.a = val
-		UpdateAllGlowStyles()
-		RequestUpdate()
+		UpdateAllGlowOpacity()
 	end)
 	group:AddChild(opacitySlider)
 	RTG_OpacitySlider = opacitySlider
