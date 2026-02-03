@@ -7,7 +7,7 @@ if DB.enabled == nil then DB.enabled = true end
 
 -- Defaults
 if type(DB.glowTexture) ~= "string" or DB.glowTexture == "" then
-	DB.glowTexture = "Interface\\Buttons\\UI-ActionButton-Border"
+	DB.glowTexture = "atlas:talents-node-square-greenglow"
 end
 
 -- Migrate older raw texture selections to atlas variants (prevents "many boxes" / invisible spritesheets)
@@ -47,7 +47,7 @@ local RTG_TEXTURES
 
 local function ApplyGlowStyle(tex)
 	-- tex is the glow texture object
-	local setting = DB.glowTexture or "Interface\\Buttons\\UI-ActionButton-Border"
+	local setting = DB.glowTexture or "atlas:talents-node-square-greenglow"
 
 	-- pick blend mode based on selection (default ADD)
 	local blend = "ADD"
@@ -402,9 +402,9 @@ end)
 -- === Config panel (/rtg config) ===
 
 RTG_TEXTURES = {
-	{ name = "Action Button Border (default)", value = "Interface\\Buttons\\UI-ActionButton-Border", blend = "ADD" },
+	{ name = "Talent Node Glow (default)", value = "atlas:talents-node-square-greenglow", blend = "ADD" },
+	{ name = "Action Button Border", value = "Interface\\Buttons\\UI-ActionButton-Border", blend = "ADD" },
 	{ name = "Button Outline", value = "Interface\\Buttons\\UI-Button-Outline", blend = "ADD" },
-	{ name = "Talent Node Glow", value = "atlas:talents-node-square-greenglow", blend = "ADD" },
 	{ name = "Soulbind Ring Glow", value = "atlas:Soulbinds_Tree_Ring_Glow", blend = "ADD" },
 	{ name = "Collections New Glow", value = "atlas:collections-newglow", blend = "ADD" },
 	{ name = "Garrison Circle Glow", value = "atlas:GarrLanding-CircleGlow", blend = "ADD" },
@@ -480,11 +480,13 @@ PopulateConfigWidgets = function(group)
 	textureDropdown:SetFullWidth(true)
 
 	local dropdownList = {}
+	local dropdownOrder = {}
 	for _, opt in ipairs(RTG_TEXTURES) do
 		dropdownList[opt.value] = opt.name
+		dropdownOrder[#dropdownOrder + 1] = opt.value
 	end
-	textureDropdown:SetList(dropdownList)
-	textureDropdown:SetValue(DB.glowTexture or "Interface\\Buttons\\UI-ActionButton-Border")
+	textureDropdown:SetList(dropdownList, dropdownOrder)
+	textureDropdown:SetValue(DB.glowTexture or "atlas:talents-node-square-greenglow")
 	textureDropdown:SetCallback("OnValueChanged", function(_, _, key)
 		DB.glowTexture = key
 		UpdateAllGlowStyles()
@@ -503,7 +505,7 @@ RefreshConfigValues = function()
 		RTG_OpacitySlider:SetValue(DB.glowColor and DB.glowColor.a or 1.0)
 	end
 	if RTG_TextureDropdown then
-		RTG_TextureDropdown:SetValue(DB.glowTexture or "Interface\\Buttons\\UI-ActionButton-Border")
+		RTG_TextureDropdown:SetValue(DB.glowTexture or "atlas:talents-node-square-greenglow")
 	end
 	if RTG_EnabledToggle then
 		RTG_EnabledToggle:SetValue(DB.enabled == true)
