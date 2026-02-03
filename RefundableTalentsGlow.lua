@@ -553,50 +553,40 @@ end
 CreateConfigPanel = function(root)
 	if RTG_ConfigPanel then return end
 
-	-- Outer shell: raw WoW frame parented to talent frame root
-	local shell = CreateFrame("Frame", "RTG_ConfigPanel", root, "BackdropTemplate")
-	shell:SetSize(240, 170)
-	shell:SetPoint("TOPLEFT", root, "TOPRIGHT", 2, 0)
-	shell:SetFrameStrata("HIGH")
-	shell:SetClampedToScreen(true)
-	shell:EnableMouse(true)
+	-- AceGUI Window container (skinnable by UI addons)
+	local window = AceGUI:Create("Window")
+	window:SetTitle("RTG Settings")
+	window:SetWidth(240)
+	window:SetHeight(160)
+	window:SetLayout("List")
+	window:EnableResize(false)
 
-	shell:SetBackdrop({
-		bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-		tile = true,
-		tileSize = 16,
-		edgeSize = 16,
-		insets = { left = 4, right = 4, top = 4, bottom = 4 },
-	})
-	shell:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
-	shell:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+	-- Reparent to talent frame root for auto-hide behavior
+	local frame = window.frame
+	frame:SetParent(root)
+	frame:ClearAllPoints()
+	frame:SetPoint("TOPLEFT", root, "TOPRIGHT", 2, 0)
+	frame:SetFrameStrata("HIGH")
+	frame:SetClampedToScreen(true)
 
-	-- Title
-	local title = shell:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-	title:SetPoint("TOP", shell, "TOP", 0, -10)
-	title:SetText("RTG Settings")
+	-- Fix close button position after reparenting
+	if window.closebutton then
+		window.closebutton:ClearAllPoints()
+		window.closebutton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -2)
+	end
 
-	-- Inner AceGUI container
-	local group = AceGUI:Create("SimpleGroup")
-	group:SetLayout("List")
+	-- Override close button to hide instead of releasing the widget
+	window:SetCallback("OnClose", function(widget)
+		widget.frame:Hide()
+	end)
 
-	-- Reparent AceGUI container frame into the shell
-	local groupFrame = group.frame
-	groupFrame:SetParent(shell)
-	groupFrame:ClearAllPoints()
-	groupFrame:SetPoint("TOPLEFT", shell, "TOPLEFT", 15, -35)
-	groupFrame:SetPoint("BOTTOMRIGHT", shell, "BOTTOMRIGHT", -15, 15)
-	groupFrame:SetFrameStrata("HIGH")
-	groupFrame:Show()
+	-- Populate widgets directly into the window
+	PopulateConfigWidgets(window)
 
-	-- Populate widgets
-	PopulateConfigWidgets(group)
+	RTG_ConfigPanel = frame
+	RTG_ConfigGroup = window
 
-	RTG_ConfigPanel = shell
-	RTG_ConfigGroup = group
-
-	shell:Hide()
+	frame:Hide()
 end
 
 ToggleConfigPanel = function()
