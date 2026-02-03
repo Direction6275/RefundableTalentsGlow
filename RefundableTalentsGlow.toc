@@ -1,7 +1,7 @@
 ## Interface: 120000
 ## Title: Refundable Talents Glow
 ## Notes: Highlights talent nodes that can be refunded right now (class + spec trees). Use /rtg config for glow color + texture.
-## Author: ChatGPT
+## Author: Cantrelle
 ## Version: @project-version@
 ## SavedVariables: RefundableTalentsGlowDB
 ## OptionalDeps: Blizzard_ClassTalentUI, Blizzard_PlayerSpells
