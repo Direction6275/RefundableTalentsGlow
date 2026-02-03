@@ -390,14 +390,19 @@ local RTG_ConfigGroup   -- AceGUI SimpleGroup (embedded inside shell)
 local RTG_ToggleButton  -- gear icon button on talent frame
 
 -- Widget references for RefreshConfigValues
-local RTG_ColorPicker, RTG_OpacitySlider, RTG_TextureDropdown
+local RTG_ColorPicker, RTG_OpacitySlider, RTG_TextureDropdown, RTG_EnabledToggle
 
 PopulateConfigWidgets = function(group)
+	-- Top row: Color picker + Enable toggle side by side
+	local topRow = AceGUI:Create("SimpleGroup")
+	topRow:SetLayout("Flow")
+	topRow:SetFullWidth(true)
+
 	-- Glow Color picker (RGB only, no alpha)
 	local colorPicker = AceGUI:Create("ColorPicker")
 	colorPicker:SetLabel("Glow Color")
 	colorPicker:SetHasAlpha(false)
-	colorPicker:SetFullWidth(true)
+	colorPicker:SetRelativeWidth(0.5)
 	local c = DB.glowColor or {}
 	colorPicker:SetColor(c.r or 0.2, c.g or 1.0, c.b or 0.2)
 	colorPicker:SetCallback("OnValueChanged", function(_, _, r, g, b)
@@ -412,8 +417,22 @@ PopulateConfigWidgets = function(group)
 		UpdateAllGlowStyles()
 		RequestUpdate()
 	end)
-	group:AddChild(colorPicker)
+	topRow:AddChild(colorPicker)
 	RTG_ColorPicker = colorPicker
+
+	-- Enable/Disable toggle
+	local enabledToggle = AceGUI:Create("CheckBox")
+	enabledToggle:SetLabel("Enable Glow")
+	enabledToggle:SetRelativeWidth(0.5)
+	enabledToggle:SetValue(DB.enabled == true)
+	enabledToggle:SetCallback("OnValueChanged", function(_, _, val)
+		DB.enabled = val
+		RequestUpdate()
+	end)
+	topRow:AddChild(enabledToggle)
+	RTG_EnabledToggle = enabledToggle
+
+	group:AddChild(topRow)
 
 	-- Glow Opacity slider
 	local opacitySlider = AceGUI:Create("Slider")
@@ -462,6 +481,9 @@ RefreshConfigValues = function()
 	if RTG_TextureDropdown then
 		RTG_TextureDropdown:SetValue(DB.glowTexture or "Interface\\Buttons\\UI-ActionButton-Border")
 	end
+	if RTG_EnabledToggle then
+		RTG_EnabledToggle:SetValue(DB.enabled == true)
+	end
 end
 
 CreateToggleButton = function(root)
@@ -507,7 +529,7 @@ CreateConfigPanel = function(root)
 
 	-- Outer shell: raw WoW frame parented to talent frame root
 	local shell = CreateFrame("Frame", "RTG_ConfigPanel", root, "BackdropTemplate")
-	shell:SetSize(240, 300)
+	shell:SetSize(240, 170)
 	shell:SetPoint("TOPLEFT", root, "TOPRIGHT", 2, 0)
 	shell:SetFrameStrata("HIGH")
 	shell:SetClampedToScreen(true)
