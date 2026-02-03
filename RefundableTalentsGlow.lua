@@ -377,12 +377,11 @@ end)
 
 RTG_TEXTURES = {
 	{ name = "Action Button Border (default)", value = "Interface\\Buttons\\UI-ActionButton-Border", blend = "ADD" },
-	{ name = "Quickslot Border", value = "Interface\\Buttons\\UI-Quickslot2", blend = "ADD" },
 	{ name = "Button Outline", value = "Interface\\Buttons\\UI-Button-Outline", blend = "ADD" },
-
-	-- Atlases (fixes sprite-sheet issues like "many boxes")
-	{ name = "Icon Alert Ants", value = "atlas:IconAlertAnts", blend = "ADD", fallback = "Interface\\SpellActivationOverlay\\IconAlertAnts" },
-	{ name = "Azerite Power Ring", value = "atlas:AzeritePowerRing", blend = "ADD", fallback = "Interface\\Azerite\\AzeritePowerRing" },
+	{ name = "Talent Node Glow", value = "atlas:talents-node-square-greenglow", blend = "ADD" },
+	{ name = "Soulbind Ring Glow", value = "atlas:Soulbinds_Tree_Ring_Glow", blend = "ADD" },
+	{ name = "Collections New Glow", value = "atlas:collections-newglow", blend = "ADD" },
+	{ name = "Garrison Circle Glow", value = "atlas:GarrLanding-CircleGlow", blend = "ADD" },
 }
 
 local RTG_ConfigPanel   -- raw WoW frame (outer shell, parented to talent frame)
