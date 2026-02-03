@@ -3,7 +3,7 @@ package-as: RefundableTalentsGlow
 curse-project-id: 1445604
 wago-project-id: E6gvnXN1
 
-enable-nolib-creation: yes
+enable-nolib-creation: no
 
 ignore:
   - README.md
