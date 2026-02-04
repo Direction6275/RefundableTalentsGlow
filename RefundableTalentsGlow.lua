@@ -173,13 +173,26 @@ end
 
 local function GetTalentRoots()
 	local roots = {}
+	local seen = {}
 
-	-- Common roots for the talent UI (varies by build)
+	-- Legacy (Dragonflight): ClassTalentFrame was the talent tree itself
 	if _G.ClassTalentFrame then
 		table.insert(roots, _G.ClassTalentFrame)
+		seen[_G.ClassTalentFrame] = true
 	end
-	if _G.PlayerSpellsFrame then
-		table.insert(roots, _G.PlayerSpellsFrame)
+
+	-- TWW+: PlayerSpellsFrame is a tabbed container (Spec / Talents / SpellBook).
+	-- Use TalentsFrame specifically so we never touch SpecFrame or its children,
+	-- which avoids taint that breaks other addons' spec-switching buttons.
+	local psf = _G.PlayerSpellsFrame
+	if psf then
+		local tf = psf.TalentsFrame
+		if tf and not seen[tf] then
+			table.insert(roots, tf)
+		elseif not tf and not seen[psf] then
+			-- Fallback in case TalentsFrame isn't available yet
+			table.insert(roots, psf)
+		end
 	end
 
 	return roots
@@ -313,9 +326,12 @@ end
 -- Forward declarations for config panel functions
 local CreateToggleButton, CreateConfigPanel, ToggleConfigPanel, PopulateConfigWidgets, RefreshConfigValues
 
-local function HookRoot(root)
-	if not root or root.__RTGHooked or not root.HookScript then return end
-	root.__RTGHooked = true
+-- Track hooked legacy frames (Dragonflight ClassTalentFrame only)
+local hookedLegacyFrames = {}
+
+local function HookLegacyRoot(root)
+	if not root or hookedLegacyFrames[root] or not root.HookScript then return end
+	hookedLegacyFrames[root] = true
 
 	root:HookScript("OnShow", function()
 		StartBurstRefresh()
@@ -324,17 +340,66 @@ local function HookRoot(root)
 
 	root:HookScript("OnHide", function()
 		StopBurstRefresh()
-		-- Hide the config panel when the talent frame closes
 		if RTG_ConfigPanel then
 			RTG_ConfigPanel:Hide()
 		end
 	end)
 end
 
+-- TWW+: Use EventRegistry callbacks instead of HookScript on TalentsFrame.
+-- HookScript fires inside TabSystemTrackerMixin:SetTab's Show/Hide loop, which
+-- taints the rest of the tab-switch execution and breaks other addons (e.g. TTT
+-- spec-switching buttons seeing isInitialized as nil due to tainted reads).
+local registeredEventCallbacks = false
+
+local function SetupEventCallbacks()
+	if registeredEventCallbacks then return end
+	if not _G.PlayerSpellsFrame then return end
+	if not EventRegistry then return end
+	registeredEventCallbacks = true
+
+	-- When a tab is selected, activate/deactivate based on whether it's the Talents tab
+	EventRegistry:RegisterCallback("PlayerSpellsFrame.TabSet", function(_, frame, tabID)
+		if frame and frame.talentTabID and tabID == frame.talentTabID then
+			local tf = frame.TalentsFrame
+			if tf then
+				StartBurstRefresh()
+				CreateToggleButton(tf)
+			end
+		else
+			StopBurstRefresh()
+			if RTG_ConfigPanel then
+				RTG_ConfigPanel:Hide()
+			end
+		end
+	end, "RTG_TabSet")
+
+	-- When the frame reopens with Talents already the active tab, TabSet won't re-fire
+	EventRegistry:RegisterCallback("PlayerSpellsFrame.OpenFrame", function()
+		local psf = _G.PlayerSpellsFrame
+		if psf and psf.TalentsFrame and psf.TalentsFrame:IsShown() then
+			StartBurstRefresh()
+			CreateToggleButton(psf.TalentsFrame)
+		end
+	end, "RTG_Open")
+
+	-- When the entire frame closes
+	EventRegistry:RegisterCallback("PlayerSpellsFrame.CloseFrame", function()
+		StopBurstRefresh()
+		if RTG_ConfigPanel then
+			RTG_ConfigPanel:Hide()
+		end
+	end, "RTG_Close")
+end
+
 local function HookAllRoots()
-	for _, root in ipairs(GetTalentRoots()) do
-		HookRoot(root)
+	-- Legacy (Dragonflight): ClassTalentFrame is the talent tree itself, safe to HookScript
+	if _G.ClassTalentFrame then
+		HookLegacyRoot(_G.ClassTalentFrame)
 	end
+
+	-- TWW+: Use EventRegistry instead of HookScript to avoid taint
+	SetupEventCallbacks()
 end
 
 -- Poll briefly to catch frames that are created after addon load.
@@ -350,10 +415,10 @@ local function StartHookPolling()
 		tries = tries + 1
 		HookAllRoots()
 
-		-- Stop once we hooked something, or after 20 tries (~10s)
-		local hookedAny = false
-		for _, root in ipairs(GetTalentRoots()) do
-			if root and root.__RTGHooked then
+		-- Stop once we've set up callbacks, or after 20 tries (~10s)
+		local hookedAny = registeredEventCallbacks
+		if not hookedAny then
+			for _ in pairs(hookedLegacyFrames) do
 				hookedAny = true
 				break
 			end
@@ -385,6 +450,24 @@ f:SetScript("OnEvent", function(_, event, arg1)
 		-- When the Blizzard UI modules load, hooks may become available.
 		if arg1 == "Blizzard_ClassTalentUI" or arg1 == "Blizzard_PlayerSpells" then
 			HookAllRoots()
+
+			-- Safety net: if Blizzard_PlayerSpells loaded before C_SpecializationInfo was
+			-- ready (e.g. during /reload), SpecFrame:OnLoad skips initialization and
+			-- isInitialized stays nil.  Schedule a deferred re-check so SpecFrame can
+			-- finish initializing once the spec system is actually ready.  This prevents
+			-- "class talent data has not yet been loaded" errors from other addons that
+			-- call ActivateSpecByIndex without first opening the Spec tab.
+			if arg1 == "Blizzard_PlayerSpells" and C_Timer and C_Timer.After then
+				C_Timer.After(1, function()
+					local psf = _G.PlayerSpellsFrame
+					if psf and psf.SpecFrame and not psf.SpecFrame.isInitialized then
+						if C_SpecializationInfo and C_SpecializationInfo.IsInitialized
+								and C_SpecializationInfo.IsInitialized() then
+							psf.SpecFrame:UpdateSpecContents()
+						end
+					end
+				end)
+			end
 		end
 		return
 	end
@@ -520,7 +603,11 @@ CreateToggleButton = function(root)
 	btn:SetFrameStrata("HIGH")
 	btn:SetFrameLevel((root.GetFrameLevel and root:GetFrameLevel() or 0) + 200)
 
-	btn:SetPoint("TOPRIGHT", root, "TOPRIGHT", -30, -4)
+	-- Anchor to the outer PlayerSpellsFrame (title bar area) if available,
+	-- but keep parented to TalentsFrame so the button hides with the tab.
+	local anchor = (_G.PlayerSpellsFrame and root ~= _G.PlayerSpellsFrame)
+		and _G.PlayerSpellsFrame or root
+	btn:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", -30, -4)
 
 	local icon = btn:CreateTexture(nil, "ARTWORK")
 	icon:SetPoint("CENTER", btn, "CENTER", 0, 3)
