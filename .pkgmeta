@@ -3,7 +3,24 @@ package-as: RefundableTalentsGlow
 curse-project-id: 1445604
 wago-project-id: E6gvnXN1
 
+externals:
+  Libs/Ace3:
+    url: https://repos.wowace.com/wow/ace3/trunk
+    tag: latest
+
 ignore:
   - README.md
   - LICENSE
   - .github
+  - CLAUDE.md
+  - .claude
+  - .codex
+  - .agents
+  # Ace3 non-runtime files
+  - Libs/Ace3/Ace3.lua
+  - Libs/Ace3/Ace3.toc
+  - Libs/Ace3/Bindings.xml
+  - Libs/Ace3/changelog.txt
+  - Libs/Ace3/CHANGES.txt
+  - Libs/Ace3/README.md
+  - Libs/Ace3/LICENSE.txt

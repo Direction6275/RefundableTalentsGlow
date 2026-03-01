@@ -6,9 +6,12 @@
 ## X-Curse-Project-ID: 1445604
 ## X-Wago-ID: E6gvnXN1
 ## SavedVariables: RefundableTalentsGlowDB
+## OptionalDeps: Ace3
 
+#@no-lib-strip@
 Libs\Ace3\LibStub\LibStub.lua
 Libs\Ace3\CallbackHandler-1.0\CallbackHandler-1.0.xml
 Libs\Ace3\AceGUI-3.0\AceGUI-3.0.xml
+#@end-no-lib-strip@
 
 RefundableTalentsGlow.lua
