@@ -6,6 +6,7 @@
 ## X-Curse-Project-ID: 1445604
 ## X-Wago-ID: E6gvnXN1
 ## SavedVariables: RefundableTalentsGlowDB
+## LoadSavedVariablesFirst: 1
 ## OptionalDeps: Ace3
 
 #@no-lib-strip@

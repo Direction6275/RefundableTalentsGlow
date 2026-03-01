@@ -1,31 +1,42 @@
 local ADDON_NAME = ...
-RefundableTalentsGlowDB = RefundableTalentsGlowDB or {}
-
-local DB = RefundableTalentsGlowDB
 local AceGUI = LibStub("AceGUI-3.0")
-if DB.enabled == nil then DB.enabled = true end
+local DB
 
--- Defaults
-if type(DB.glowTexture) ~= "string" or DB.glowTexture == "" then
-	DB.glowTexture = "atlas:talents-node-square-greenglow"
+local function InitializeDB()
+	if type(RefundableTalentsGlowDB) ~= "table" then
+		RefundableTalentsGlowDB = {}
+	end
+	DB = RefundableTalentsGlowDB
+
+	if DB.enabled == nil then
+		DB.enabled = true
+	end
+
+	-- Defaults
+	if type(DB.glowTexture) ~= "string" or DB.glowTexture == "" then
+		DB.glowTexture = "atlas:talents-node-square-greenglow"
+	end
+
+	-- Migrate older raw texture selections to atlas variants (prevents "many boxes" / invisible spritesheets)
+	if DB.glowTexture == "Interface\\SpellActivationOverlay\\IconAlertAnts" then
+		DB.glowTexture = "atlas:IconAlertAnts"
+	end
+	if DB.glowTexture == "Interface\\Azerite\\AzeritePowerRing" then
+		DB.glowTexture = "atlas:AzeritePowerRing"
+	end
+
+	if type(DB.glowColor) ~= "table" then
+		DB.glowColor = { r = 0.2, g = 1.0, b = 0.2, a = 1.0 }
+	else
+		DB.glowColor.r = tonumber(DB.glowColor.r) or 0.2
+		DB.glowColor.g = tonumber(DB.glowColor.g) or 1.0
+		DB.glowColor.b = tonumber(DB.glowColor.b) or 0.2
+		DB.glowColor.a = tonumber(DB.glowColor.a) or 1.0
+	end
 end
 
--- Migrate older raw texture selections to atlas variants (prevents "many boxes" / invisible spritesheets)
-if DB.glowTexture == "Interface\\SpellActivationOverlay\\IconAlertAnts" then
-	DB.glowTexture = "atlas:IconAlertAnts"
-end
-if DB.glowTexture == "Interface\\Azerite\\AzeritePowerRing" then
-	DB.glowTexture = "atlas:AzeritePowerRing"
-end
-
-if type(DB.glowColor) ~= "table" then
-	DB.glowColor = { r = 0.2, g = 1.0, b = 0.2, a = 1.0 }
-else
-	DB.glowColor.r = tonumber(DB.glowColor.r) or 0.2
-	DB.glowColor.g = tonumber(DB.glowColor.g) or 1.0
-	DB.glowColor.b = tonumber(DB.glowColor.b) or 0.2
-	DB.glowColor.a = tonumber(DB.glowColor.a) or 1.0
-end
+-- Keep a safe default binding even before ADDON_LOADED.
+InitializeDB()
 
 
 local function SafeCall(func, ...)
@@ -447,6 +458,15 @@ f:RegisterEvent("ACTIVE_COMBAT_CONFIG_CHANGED")
 
 f:SetScript("OnEvent", function(_, event, arg1)
 	if event == "ADDON_LOADED" then
+		if arg1 == ADDON_NAME then
+			-- Authoritative SavedVariables bind/normalize point.
+			InitializeDB()
+			if RefreshConfigValues then
+				RefreshConfigValues()
+			end
+			return
+		end
+
 		-- When the Blizzard UI modules load, hooks may become available.
 		if arg1 == "Blizzard_ClassTalentUI" or arg1 == "Blizzard_PlayerSpells" then
 			HookAllRoots()
