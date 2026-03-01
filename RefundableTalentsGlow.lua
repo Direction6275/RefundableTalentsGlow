@@ -12,6 +12,12 @@ local function InitializeDB()
 		DB.enabled = true
 	end
 
+	if DB.disableApexGlow == nil then
+		DB.disableApexGlow = true
+	else
+		DB.disableApexGlow = DB.disableApexGlow == true
+	end
+
 	-- Defaults
 	if type(DB.glowTexture) ~= "string" or DB.glowTexture == "" then
 		DB.glowTexture = "atlas:talents-node-square-greenglow"
@@ -174,12 +180,77 @@ local function SetGlowing(button, shouldGlow)
 	end
 end
 
+local function ShouldSkipGlowForHeroNode(configID, nodeID)
+	if not (C_Traits and C_Traits.GetNodeInfo) then
+		return true, nil
+	end
+
+	local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
+	-- Node metadata can be temporarily unavailable while talents UI builds.
+	-- Fail-safe behavior: skip glow until we can classify the node.
+	if not nodeInfo then
+		return true, nil
+	end
+
+	-- Hero talent tree nodes belong to a SubTree.
+	if nodeInfo.subTreeID ~= nil then
+		return true, nodeInfo
+	end
+
+	-- Hero talent selector nodes are SubTreeSelection nodes.
+	if Enum and Enum.TraitNodeType and nodeInfo.type == Enum.TraitNodeType.SubTreeSelection then
+		return true, nodeInfo
+	end
+
+	return false, nodeInfo
+end
+
+local function IsApexNode(configID, nodeInfo)
+	if not (nodeInfo and type(nodeInfo.entryIDs) == "table") then
+		return false
+	end
+	if not (C_Traits and C_Traits.GetEntryInfo and Enum and Enum.TraitNodeEntryType) then
+		return false
+	end
+
+	local capCircle = Enum.TraitNodeEntryType.SpendCapstoneCircle
+	local capSquare = Enum.TraitNodeEntryType.SpendCapstoneSquare
+	if capCircle == nil or capSquare == nil then
+		return false
+	end
+
+	for _, entryID in ipairs(nodeInfo.entryIDs) do
+		if type(entryID) == "number" then
+			local entryInfo = C_Traits.GetEntryInfo(configID, entryID)
+			local entryType = entryInfo and entryInfo.type
+			if entryType == capCircle or entryType == capSquare then
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
 local function IsRefundableNode(configID, nodeID)
+	local shouldSkipHero, nodeInfo = ShouldSkipGlowForHeroNode(configID, nodeID)
+	if shouldSkipHero then
+		return false
+	end
+
 	-- "CanRefundRank" is the closest direct API for "right-click refundable right now".
 	if not (C_Traits and C_Traits.CanRefundRank) then
 		return false
 	end
-	return SafeCall(C_Traits.CanRefundRank, configID, nodeID) == true
+	if SafeCall(C_Traits.CanRefundRank, configID, nodeID) ~= true then
+		return false
+	end
+
+	if DB.disableApexGlow == true and IsApexNode(configID, nodeInfo) then
+		return false
+	end
+
+	return true
 end
 
 local function GetTalentRoots()
@@ -518,7 +589,7 @@ local RTG_ConfigGroup   -- AceGUI SimpleGroup (embedded inside shell)
 local RTG_ToggleButton  -- gear icon button on talent frame
 
 -- Widget references for RefreshConfigValues
-local RTG_ColorPicker, RTG_OpacitySlider, RTG_TextureDropdown, RTG_EnabledToggle
+local RTG_ColorPicker, RTG_OpacitySlider, RTG_TextureDropdown, RTG_EnabledToggle, RTG_DisableApexToggle
 
 PopulateConfigWidgets = function(group)
 	-- Top row: Color picker + Enable toggle side by side
@@ -561,6 +632,18 @@ PopulateConfigWidgets = function(group)
 	RTG_EnabledToggle = enabledToggle
 
 	group:AddChild(topRow)
+
+	-- Apex toggle
+	local disableApexToggle = AceGUI:Create("CheckBox")
+	disableApexToggle:SetLabel("Disable Glow on Apex Talents")
+	disableApexToggle:SetFullWidth(true)
+	disableApexToggle:SetValue(DB.disableApexGlow == true)
+	disableApexToggle:SetCallback("OnValueChanged", function(_, _, val)
+		DB.disableApexGlow = val == true
+		RequestUpdate()
+	end)
+	group:AddChild(disableApexToggle)
+	RTG_DisableApexToggle = disableApexToggle
 
 	-- Glow Opacity slider
 	local opacitySlider = AceGUI:Create("Slider")
@@ -613,6 +696,9 @@ RefreshConfigValues = function()
 	if RTG_EnabledToggle then
 		RTG_EnabledToggle:SetValue(DB.enabled == true)
 	end
+	if RTG_DisableApexToggle then
+		RTG_DisableApexToggle:SetValue(DB.disableApexGlow == true)
+	end
 end
 
 CreateToggleButton = function(root)
@@ -664,7 +750,7 @@ CreateConfigPanel = function(root)
 	local window = AceGUI:Create("Window")
 	window:SetTitle("RTG Settings")
 	window:SetWidth(240)
-	window:SetHeight(160)
+	window:SetHeight(190)
 	window:SetLayout("List")
 	window:EnableResize(false)
 
