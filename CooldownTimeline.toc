@@ -1,7 +1,7 @@
 ## Interface: 120001
 ## Title: CooldownTimeline
 ## Notes: Overlay personal cooldowns onto Blizzard's boss encounter timeline
-## Author: nicho
+## Author: Cantrelle
 ## Version: @project-version@
 ## SavedVariables: CooldownTimelineDB
 ## OptionalDeps: Ace3
