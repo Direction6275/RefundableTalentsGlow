@@ -1,4 +1,4 @@
-## Interface: 120000
+## Interface: 120001
 ## Title: Refundable Talents Glow
 ## Notes: Highlights talent nodes that can be refunded right now (class + spec trees). Use /rtg config for glow color + texture.
 ## Author: Cantrelle
